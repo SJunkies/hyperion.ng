@@ -23,7 +23,6 @@ ProtoClientConnection::ProtoClientConnection(QTcpSocket *socket)
 	: QObject()
 	, _socket(socket)
 	, _hyperion(Hyperion::getInstance())
-	, _receiveBuffer()
 	, _priority(-1)
 	, _clientAddress(QHostInfo::fromName(socket->peerAddress().toString()).hostName())
 {
@@ -39,39 +38,44 @@ ProtoClientConnection::~ProtoClientConnection()
 
 void ProtoClientConnection::readData()
 {
-	_receiveBuffer += _socket->readAll();
-
-	// check if we can read a message size
-	if (_receiveBuffer.size() <= 4)
+	qint64 bytesAvail;
+	while((bytesAvail = _socket->bytesAvailable()))
 	{
-		return;
+		// ignore until we get 4 bytes.
+		if (bytesAvail < 4) {
+			continue;
+		}
+
+		char sizeBuf[4];
+		 _socket->read(sizeBuf, sizeof(sizeBuf));
+
+		uint32_t messageSize =
+			((sizeBuf[0]<<24) & 0xFF000000) |
+			((sizeBuf[1]<<16) & 0x00FF0000) |
+			((sizeBuf[2]<< 8) & 0x0000FF00) |
+			((sizeBuf[3]    ) & 0x000000FF);
+
+		QByteArray buffer;
+		while((uint32_t)buffer.size() < messageSize)
+		{
+			_socket->waitForReadyRead();
+			buffer.append(_socket->read(messageSize - buffer.size()));
+		}
+
+		const uint8_t* msgData = reinterpret_cast<const uint8_t*>(buffer.constData());
+		flatbuffers::Verifier verifier(msgData, messageSize);
+
+		if (!proto::VerifyHyperionRequestBuffer(verifier))
+		{
+			sendErrorReply("Unable to parse message");
+			return;
+		}
+
+		auto message = proto::GetHyperionRequest(msgData);
+
+		handleMessage(message);
+		emit newMessage(msgData,messageSize);
 	}
-
-	// read the message size
-	uint32_t messageSize =
-			((_receiveBuffer[0]<<24) & 0xFF000000) |
-			((_receiveBuffer[1]<<16) & 0x00FF0000) |
-			((_receiveBuffer[2]<< 8) & 0x0000FF00) |
-			((_receiveBuffer[3]    ) & 0x000000FF);
-
-	// check if we can read a complete message
-	if ((uint32_t) _receiveBuffer.size() < messageSize + 4)
-	{
-		return;
-	}
-
-	// read a message
-	proto::HyperionRequest message;
-	if (!message.ParseFromArray(_receiveBuffer.data() + 4, messageSize))
-	{
-		sendErrorReply("Unable to parse message");
-	}
-
-	// handle the message
-	handleMessage(message);
-
-	// remove message data from buffer
-	_receiveBuffer = _receiveBuffer.mid(messageSize + 4);
 }
 
 void ProtoClientConnection::socketClosed()
@@ -82,49 +86,44 @@ void ProtoClientConnection::socketClosed()
 
 void ProtoClientConnection::setVideoMode(const VideoMode videoMode)
 {
-	int video_Mode = (int)videoMode;
-	proto::HyperionReply vMode;
+	proto::HyperionReplyBuilder replyBuilder(builder);
+	replyBuilder.add_type(proto::Type_VIDEO);
+	replyBuilder.add_video((int)videoMode);
 
-	// create proto message
-	vMode.set_type(proto::HyperionReply::VIDEO);
-	vMode.set_video(video_Mode);
-
-	// send message
-	sendMessage(vMode);
+	auto reply = replyBuilder.Finish();
+	
+	builder.Finish(reply);
 }
 
-void ProtoClientConnection::handleMessage(const proto::HyperionRequest & message)
+void ProtoClientConnection::handleMessage(const proto::HyperionRequest * message)
 {
-	// forward messages
-	emit newMessage(&message);
-
-	switch (message.command())
+	switch (message->command())
 	{
-	case proto::HyperionRequest::COLOR:
-		if (!message.HasExtension(proto::ColorRequest::colorRequest))
+	case proto::Command_COLOR:
+		if (!flatbuffers::IsFieldPresent(message, proto::HyperionRequest::VT_COLORREQUEST))
 		{
 			sendErrorReply("Received COLOR command without ColorRequest");
 			break;
 		}
-		handleColorCommand(message.GetExtension(proto::ColorRequest::colorRequest));
+		handleColorCommand(message->colorRequest());
 		break;
-	case proto::HyperionRequest::IMAGE:
-		if (!message.HasExtension(proto::ImageRequest::imageRequest))
+	case proto::Command_IMAGE:
+		if (!flatbuffers::IsFieldPresent(message, proto::HyperionRequest::VT_IMAGEREQUEST))
 		{
 			sendErrorReply("Received IMAGE command without ImageRequest");
 			break;
 		}
-		handleImageCommand(message.GetExtension(proto::ImageRequest::imageRequest));
+		handleImageCommand(message->imageRequest());
 		break;
-	case proto::HyperionRequest::CLEAR:
-		if (!message.HasExtension(proto::ClearRequest::clearRequest))
+	case proto::Command_CLEAR:
+		if (!flatbuffers::IsFieldPresent(message, proto::HyperionRequest::VT_CLEARREQUEST))
 		{
 			sendErrorReply("Received CLEAR command without ClearRequest");
 			break;
 		}
-		handleClearCommand(message.GetExtension(proto::ClearRequest::clearRequest));
+		handleClearCommand(message->clearRequest());
 		break;
-	case proto::HyperionRequest::CLEARALL:
+	case proto::Command_CLEARALL:
 		handleClearallCommand();
 		break;
 	default:
@@ -132,15 +131,15 @@ void ProtoClientConnection::handleMessage(const proto::HyperionRequest & message
 	}
 }
 
-void ProtoClientConnection::handleColorCommand(const proto::ColorRequest &message)
+void ProtoClientConnection::handleColorCommand(const proto::ColorRequest *message)
 {
 	// extract parameters
-	int priority = message.priority();
-	int duration = message.has_duration() ? message.duration() : -1;
+	int priority = message->priority();
+	int duration = message->duration();
 	ColorRgb color;
-	color.red = qRed(message.rgbcolor());
-	color.green = qGreen(message.rgbcolor());
-	color.blue = qBlue(message.rgbcolor());
+	color.red = qRed(message->RgbColor());
+	color.green = qGreen(message->RgbColor());
+	color.blue = qBlue(message->RgbColor());
 
 	// make sure the prio is registered before setColor()
 	if(priority != _priority)
@@ -157,14 +156,14 @@ void ProtoClientConnection::handleColorCommand(const proto::ColorRequest &messag
 	sendSuccessReply();
 }
 
-void ProtoClientConnection::handleImageCommand(const proto::ImageRequest &message)
+void ProtoClientConnection::handleImageCommand(const proto::ImageRequest *message)
 {
 	// extract parameters
-	int priority = message.priority();
-	int duration = message.has_duration() ? message.duration() : -1;
-	int width = message.imagewidth();
-	int height = message.imageheight();
-	const std::string & imageData = message.imagedata();
+	int priority = message->priority();
+	int duration = message->duration();
+	int width = message->imagewidth();
+	int height = message->imageheight();
+	const auto & imageData = message->imagedata();
 
 	// make sure the prio is registered before setInput()
 	if(priority != _priority)
@@ -175,7 +174,7 @@ void ProtoClientConnection::handleImageCommand(const proto::ImageRequest &messag
 	}
 
 	// check consistency of the size of the received data
-	if ((int) imageData.size() != width*height*3)
+	if ((int) imageData->size() != width*height*3)
 	{
 		sendErrorReply("Size of image data does not match with the width and height");
 		return;
@@ -183,7 +182,7 @@ void ProtoClientConnection::handleImageCommand(const proto::ImageRequest &messag
 
 	// create ImageRgb
 	Image<ColorRgb> image(width, height);
-	memcpy(image.memptr(), imageData.c_str(), imageData.size());
+	memcpy(image.memptr(), imageData->data(), imageData->size());
 
 	_hyperion->setInputImage(_priority, image, duration);
 
@@ -192,10 +191,10 @@ void ProtoClientConnection::handleImageCommand(const proto::ImageRequest &messag
 }
 
 
-void ProtoClientConnection::handleClearCommand(const proto::ClearRequest &message)
+void ProtoClientConnection::handleClearCommand(const proto::ClearRequest *message)
 {
 	// extract parameters
-	int priority = message.priority();
+	int priority = message->priority();
 
 	// clear priority
 	_hyperion->clear(priority);
@@ -218,35 +217,32 @@ void ProtoClientConnection::handleNotImplemented()
 	sendErrorReply("Command not implemented");
 }
 
-void ProtoClientConnection::sendMessage(const google::protobuf::Message &message)
+void ProtoClientConnection::sendMessage()
 {
-	std::string serializedReply = message.SerializeAsString();
-	uint32_t size = serializedReply.size();
+	auto size = builder.GetSize();
+	const uint8_t* buffer = builder.GetBufferPointer();
 	uint8_t sizeData[] = {uint8_t(size >> 24), uint8_t(size >> 16), uint8_t(size >> 8), uint8_t(size)};
 	_socket->write((const char *) sizeData, sizeof(sizeData));
-	_socket->write(serializedReply.data(), serializedReply.length());
+	_socket->write((const char *)buffer, size);
 	_socket->flush();
+	builder.Clear();
 }
 
 void ProtoClientConnection::sendSuccessReply()
 {
-	// create reply
-	proto::HyperionReply reply;
-	reply.set_type(proto::HyperionReply::REPLY);
-	reply.set_success(true);
+	auto reply = proto::CreateHyperionReplyDirect(builder, proto::Type_REPLY, true);
+	builder.Finish(reply);
 
 	// send reply
-	sendMessage(reply);
+	sendMessage();
 }
 
 void ProtoClientConnection::sendErrorReply(const std::string &error)
 {
 	// create reply
-	proto::HyperionReply reply;
-	reply.set_type(proto::HyperionReply::REPLY);
-	reply.set_success(false);
-	reply.set_error(error);
+	auto reply = proto::CreateHyperionReplyDirect(builder, proto::Type_REPLY, false, error.c_str());
+	builder.Finish(reply);
 
 	// send reply
-	sendMessage(reply);
+	sendMessage();
 }

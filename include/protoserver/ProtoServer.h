@@ -82,8 +82,11 @@ private slots:
 	/// @param connection The Connection object which is being closed
 	///
 	void closedConnection(ProtoClientConnection * connection);
-
-	void newMessage(const proto::HyperionRequest * message);
+	///
+	/// Slot which is called when we get a new Message relayed
+	/// @param connection The Connection object which is being closed
+	///
+	void newMessage(const uint8_t* buffer , uint32_t size);
 
 private:
 	/// Hyperion instance

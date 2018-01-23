@@ -5,7 +5,7 @@ find_package(Qt5Widgets REQUIRED)
 
 include_directories(
 	${CMAKE_CURRENT_BINARY_DIR}/../../libsrc/protoserver
-	${PROTOBUF_INCLUDE_DIRS}
+	${FLATBUFFERS_INCLUDE_DIRS}
 )
 
 set(Hyperion_FB_HEADERS

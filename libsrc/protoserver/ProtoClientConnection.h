@@ -16,7 +16,8 @@
 #include <utils/VideoMode.h>
 
 // proto includes
-#include "message.pb.h"
+#include "hyperion_reply_generated.h"
+#include "hyperion_request_generated.h"
 #include "protoserver/ProtoConnection.h"
 
 ///
@@ -51,7 +52,7 @@ signals:
 	/// @param connection This connection object
 	///
 	void connectionClosed(ProtoClientConnection * connection);
-	void newMessage(const proto::HyperionRequest * message);
+	void newMessage(const uint8_t* msgData, uint32_t messageSize);
 
 private slots:
 	///
@@ -70,28 +71,28 @@ private:
 	///
 	/// @param message the incoming message as string
 	///
-	void handleMessage(const proto::HyperionRequest &message);
+	void handleMessage(const proto::HyperionRequest *message);
 
 	///
 	/// Handle an incoming Proto Color message
 	///
 	/// @param message the incoming message
 	///
-	void handleColorCommand(const proto::ColorRequest & message);
+	void handleColorCommand(const proto::ColorRequest * message);
 
 	///
 	/// Handle an incoming Proto Image message
 	///
 	/// @param message the incoming message
 	///
-	void handleImageCommand(const proto::ImageRequest & message);
+	void handleImageCommand(const proto::ImageRequest * message);
 
 	///
 	/// Handle an incoming Proto Clear message
 	///
 	/// @param message the incoming message
 	///
-	void handleClearCommand(const proto::ClearRequest & message);
+	void handleClearCommand(const proto::ClearRequest * message);
 
 	///
 	/// Handle an incoming Proto Clearall message
@@ -106,9 +107,7 @@ private:
 	///
 	/// Send a message to the connected client
 	///
-	/// @param message The Proto message to send
-	///
-	void sendMessage(const google::protobuf::Message &message);
+	void sendMessage();
 
 	///
 	/// Send a standard reply indicating success
@@ -129,11 +128,11 @@ private:
 	/// Link to Hyperion for writing led-values to a priority channel
 	Hyperion * _hyperion;
 
-	/// The buffer used for reading data from the socket
-	QByteArray _receiveBuffer;
-
 	int _priority;
 
 	/// address of client
 	QString _clientAddress;
+
+	// Flatbuffers builder
+	flatbuffers::FlatBufferBuilder builder;
 };

@@ -7,7 +7,7 @@ find_package(X11 REQUIRED)
 include_directories(
 	${CMAKE_CURRENT_BINARY_DIR}/../../libsrc/protoserver
 	${X11_INCLUDES}
-	${PROTOBUF_INCLUDE_DIRS}
+	${FLATBUFFERS_INCLUDE_DIRS}
 )
 
 set(Hyperion_X11_HEADERS

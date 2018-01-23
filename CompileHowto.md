@@ -74,7 +74,7 @@ export HYPERION_DIR="hyperion"
 git clone --recursive https://github.com/hyperion-project/hyperion.ng.git "$HYPERION_DIR"
 ```
 
-**Note:** If you forget the --recursive in above statement or you are updating an existing clone you need to clone the protobuf submodule by runnning the follwing two statements:
+**Note:** If you forget the --recursive in above statement or you are updating an existing clone you need to clone the flatbuffers submodule by runnning the follwing two statements:
 ```
 git submodule init
 git submodule update

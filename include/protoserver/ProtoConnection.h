@@ -14,7 +14,9 @@
 #include <utils/VideoMode.h>
 #include <utils/Logger.h>
 
-#include <message.pb.h>
+
+#include <hyperion_reply_generated.h>
+#include <hyperion_request_generated.h>
 
 ///
 /// Connection class to setup an connection to the hyperion server and execute commands
@@ -75,7 +77,7 @@ public:
 	///
 	/// @param message The message to send
 	///
-	void sendMessage(const proto::HyperionRequest & message);
+	void sendMessage(const uint8_t* buffer, uint32_t size);
 
 private slots:
 	/// Try to connect to the Hyperion host
@@ -102,7 +104,7 @@ private:
 	///
 	/// @return true if the reply indicates success
 	///
-	bool parseReply(const proto::HyperionReply & reply);
+	bool parseReply(const proto::HyperionReply * reply);
 
 private:
 	/// The TCP-Socket with the connection to the server
@@ -120,8 +122,6 @@ private:
 	QTimer _timer;
 	QAbstractSocket::SocketState  _prevSocketState;
 
-	/// The buffer used for reading data from the socket
-	QByteArray _receiveBuffer;
-
 	Logger * _log;
+	flatbuffers::FlatBufferBuilder builder;
 };

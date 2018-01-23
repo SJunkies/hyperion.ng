@@ -120,7 +120,7 @@ void ProtoServer::newConnection()
 
 				// register slot for cleaning up after the connection closed
 				connect(connection, SIGNAL(connectionClosed(ProtoClientConnection*)), this, SLOT(closedConnection(ProtoClientConnection*)));
-				connect(connection, SIGNAL(newMessage(const proto::HyperionRequest*)), this, SLOT(newMessage(const proto::HyperionRequest*)));
+				connect(connection, SIGNAL(newMessage(const uint8_t* , uint32_t)), this, SLOT(newMessage(const uint8_t* , uint32_t)));
 
 				// register forward signal for video mode
 				connect(this, SIGNAL(videoMode(VideoMode)), connection, SLOT(setVideoMode(VideoMode)));
@@ -133,10 +133,10 @@ void ProtoServer::newConnection()
 	}
 }
 
-void ProtoServer::newMessage(const proto::HyperionRequest * message)
+void ProtoServer::newMessage(const uint8_t* buffer, uint32_t size)
 {
 	for (int i = 0; i < _proxy_connections.size(); ++i)
-		_proxy_connections.at(i)->sendMessage(*message);
+		_proxy_connections.at(i)->sendMessage(buffer, size);
 }
 
 void ProtoServer::sendImageToProtoSlaves(int priority, const Image<ColorRgb> & image, int duration_ms)

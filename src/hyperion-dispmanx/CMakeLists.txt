@@ -12,7 +12,7 @@ ENDIF()
 include_directories(
 	${CMAKE_CURRENT_BINARY_DIR}/../../libsrc/protoserver
 	${BCM_INCLUDE_DIRS}
-	${PROTOBUF_INCLUDE_DIRS}
+	${FLATBUFFERS_INCLUDE_DIRS}
 )
 
 set(Hyperion_Dispmanx_HEADERS
