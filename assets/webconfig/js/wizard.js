@@ -8,7 +8,7 @@
 			if(getStorage("kodiAddress" != null))
 			{
 				kodiAddress = getStorage("kodiAddress");
-				sendToKodi("stop");
+				kodiAPI.sendStop();
 			}
 		}
 	});
@@ -24,7 +24,7 @@
 		$('#wizp3').toggle(false);
 		//cc
 		if(withKodi)
-			sendToKodi("stop");
+			kodiAPI.sendStop();
 		step = 0;
 	}
 
@@ -162,7 +162,7 @@
 	$('#btn_wizard_byteorder').off().on('click',startWizardRGB);
 
 	//color calibration wizard
-	var kodiAddress = document.location.hostname+':8080';
+	var kodiAddress = document.location.hostname+':'+kodiAPI.DEFAULT_TCP_PORT;
 	var wiz_editor;
 	var colorLength;
 	var cobj;
@@ -183,46 +183,8 @@
 		if(typeof pictures[picnr] === 'undefined')
 			picnr = 0;
 
-		sendToKodi('playP',pictures[picnr]);
+		kodiAPI.sendMedia(imgAddress + pictures[picnr] + ".png");
 		picnr++;
-	}
-
-	function sendToKodi(type, content, cb)
-	{
-		var command;
-
-		if(type == "playP")
-			content = imgAddress+content+'.png';
-		if(type == "playV")
-			content = vidAddress+content;
-
-		if(type == "msg")
-			command = '{"jsonrpc":"2.0","method":"GUI.ShowNotification","params":{"title": "'+$.i18n('wiz_cc_title')+'", "message": "'+content+'", "image":"info", "displaytime":5000 },"id":"1"}';
-		else if (type == "stop")
-			command = '{"jsonrpc":"2.0","method":"Player.Stop","params":{"playerid": 2},"id":"1"}';
-		else if (type == "playP" || type == "playV")
-			command = '{"jsonrpc":"2.0","method":"Player.Open","params":{"item":{"file":"' + content + '"}},"id":"1"}';
-		else if (type == "rotate")
-			command = '{"jsonrpc":"2.0","method":"Player.Rotate","params":{"playerid": 2},"id":"1"}';
-
-		$.ajax({
-			url: 'http://' + kodiAddress + '/jsonrpc',
-			dataType: 'jsonp',
-			crossDomain: true,
-			jsonpCallback: 'jsonCallback',
-			type: 'POST',
-			timeout: 2000,
-			data: 'request=' + encodeURIComponent( command )
-		})
-		.done( function( data, textStatus, jqXHR ) {
-			if ( jqXHR.status == 200 && data['result'] == 'OK' && type == "msg")
-				cb("success");
-		})
-		// Older Versions Of Kodi/XBMC Tend To Fail Due To CORS But Typically If A '200' Is Returned Then It Has Worked!
-		.fail( function( jqXHR, textStatus ) {
-			if ( jqXHR.status != 200 && type == "msg")
-				cb("error")
-		});
 	}
 
 	function performAction()
@@ -245,7 +207,7 @@
 			if(withKodi)
 			{
 				h += '<br/>'+$.i18n('wiz_cc_kodishould',$.i18n('edt_conf_color_white_title'));
-				sendToKodi('playP',"white");
+				kodiAPI.sendMedia(imgAddress+"white.png");
 			}
 			else
 				h += '<br/>'+$.i18n('wiz_cc_lettvshow',$.i18n('edt_conf_color_white_title'));
@@ -257,7 +219,7 @@
 			h = '<p>'+$.i18n('wiz_cc_adjustgamma')+'</p>';
 			if(withKodi)
 			{
-				sendToKodi('playP',"HGradient");
+				kodiAPI.sendMedia(imgAddress+"HGradient.png");
 				h +='<button id="wiz_cc_btn_sp" class="btn btn-primary">'+$.i18n('wiz_cc_btn_switchpic')+'</button>';
 			}
 			else
@@ -274,7 +236,7 @@
 			if(withKodi)
 			{
 				h += '<br/>'+$.i18n('wiz_cc_kodishould',$.i18n('edt_conf_color_red_title'));
-				sendToKodi('playP',"red");
+				kodiAPI.sendMedia(imgAddress+"red.png");
 			}
 			else
 				h += '<br/>'+$.i18n('wiz_cc_lettvshow',$.i18n('edt_conf_color_red_title'));
@@ -287,7 +249,7 @@
 			if(withKodi)
 			{
 				h += '<br/>'+$.i18n('wiz_cc_kodishould',$.i18n('edt_conf_color_green_title'));
-				sendToKodi('playP',"green");
+				kodiAPI.sendMedia(imgAddress+"green.png");
 			}
 			else
 				h += '<br/>'+$.i18n('wiz_cc_lettvshow',$.i18n('edt_conf_color_green_title'));
@@ -300,7 +262,7 @@
 			if(withKodi)
 			{
 				h += '<br/>'+$.i18n('wiz_cc_kodishould',$.i18n('edt_conf_color_blue_title'));
-				sendToKodi('playP',"blue");
+				kodiAPI.sendMedia(imgAddress+"blue.png");
 			}
 			else
 				h += '<br/>'+$.i18n('wiz_cc_lettvshow',$.i18n('edt_conf_color_blue_title'));
@@ -313,7 +275,7 @@
 			if(withKodi)
 			{
 				h += '<br/>'+$.i18n('wiz_cc_kodishould',$.i18n('edt_conf_color_cyan_title'));
-				sendToKodi('playP',"cyan");
+				kodiAPI.sendMedia(imgAddress+"cyan.png");
 			}
 			else
 				h += '<br/>'+$.i18n('wiz_cc_lettvshow',$.i18n('edt_conf_color_cyan_title'));
@@ -326,7 +288,7 @@
 			if(withKodi)
 			{
 				h += '<br/>'+$.i18n('wiz_cc_kodishould',$.i18n('edt_conf_color_magenta_title'));
-				sendToKodi('playP',"magenta");
+				kodiAPI.sendMedia(imgAddress+"magenta.png");
 			}
 			else
 				h += '<br/>'+$.i18n('wiz_cc_lettvshow',$.i18n('edt_conf_color_magenta_title'));
@@ -339,7 +301,7 @@
 			if(withKodi)
 			{
 				h += '<br/>'+$.i18n('wiz_cc_kodishould',$.i18n('edt_conf_color_yellow_title'));
-				sendToKodi('playP',"yellow");
+				kodiAPI.sendMedia(imgAddress+"yellow.png");
 			}
 			else
 				h += '<br/>'+$.i18n('wiz_cc_lettvshow',$.i18n('edt_conf_color_yellow_title'));
@@ -352,7 +314,7 @@
 			if(withKodi)
 			{
 				h += '<br/>'+$.i18n('wiz_cc_kodishould',$.i18n('edt_conf_color_black_title'));
-				sendToKodi('playP',"black");
+				kodiAPI.sendMedia(imgAddress+"black.png");
 			}
 			else
 				h += '<br/>'+$.i18n('wiz_cc_lettvshow',$.i18n('edt_conf_color_black_title'));
@@ -365,7 +327,7 @@
 			if(withKodi)
 			{
 				h += '<p>'+$.i18n('wiz_cc_testintrok')+'</p>';
-				sendToKodi('stop');
+				kodiAPI.sendStop();
 				for(var i = 0; i<availVideos.length; i++)
 				{
 					var txt = availVideos[i].replace(/_/g," ");
@@ -380,9 +342,9 @@
 
 			$('.videobtn').off().on('click', function(e){
 				if(e.target.id == "stop")
-					sendToKodi("stop");
+					kodiAPI.sendStop();
 				else
-					sendToKodi("playV",e.target.id+'.mp4');
+					kodiAPI.sendMedia(vidAddress + e.target.id+'.mp4');
 
 				$(this).attr("disabled", true);
 				setTimeout(function(){$('.videobtn').attr("disabled", false)},10000);
@@ -426,9 +388,9 @@
 		});
 
 		$('#wiz_cc_kodiip').off().on('change',function() {
-			kodiAddress = $(this).val();
-			setStorage("kodiAddress", kodiAddress);
-			sendToKodi("msg", $.i18n('wiz_cc_kodimsg_start'), function(cb){
+			setStorage("kodiAddress", $(this).val());
+			$('#kodi_status').html('<p style="color:black;font-weight:bold;margin-top:5px">'+$.i18n('wiz_cc_kodimsg_connect')+'</p>');
+			kodiAPI.connect(function(cb){
 				if(cb == "error")
 				{
 					$('#kodi_status').html('<p style="color:red;font-weight:bold;margin-top:5px">'+$.i18n('wiz_cc_kodidiscon')+'</p><p>'+$.i18n('wiz_cc_kodidisconlink')+' <a href="https://sourceforge.net/projects/hyperion-project/files/resources/Hyperion_calibration_pictures.zip/download" target="_blank">'+$.i18n('wiz_cc_link')+'</p>');
@@ -438,6 +400,7 @@
 				{
 					$('#kodi_status').html('<p style="color:green;font-weight:bold;margin-top:5px">'+$.i18n('wiz_cc_kodicon')+'</p>');
 					withKodi = true;
+					kodiAPI.sendMessage($.i18n('wiz_cc_title'), $.i18n('wiz_cc_kodimsg_start'), "info", 5000);
 				}
 
 				$('#btn_wiz_cont').attr('disabled', false);
@@ -500,6 +463,7 @@
 		$('#btn_wiz_save').off().on('click',function() {
 			requestWriteConfig(wiz_editor.getValue());
 			resetWizard();
+			kodiAPI.disconnect();
 			setTimeout(initRestart, 200);
 		});
 
