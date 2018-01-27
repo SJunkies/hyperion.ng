@@ -75,15 +75,13 @@ void ProtoConnection::readData()
 		const uint8_t* replyData = reinterpret_cast<const uint8_t*>(buffer.constData());
 		flatbuffers::Verifier verifier(replyData, messageSize);
 
-		if (!proto::VerifyHyperionReplyBuffer(verifier))
+		if (!hyperionnet::VerifyReplyBuffer(verifier))
 		{
 			Error(_log, "Error while reading data from host");
 			return;
 		}
 
-		auto reply = proto::GetHyperionReply(replyData);
-
-		parseReply(reply);
+		parseReply(hyperionnet::GetReply(replyData));
 	}
 }
 
@@ -92,30 +90,30 @@ void ProtoConnection::setSkipReply(bool skip)
 	_skipReply = skip;
 }
 
-void ProtoConnection::setColor(const ColorRgb & color, int priority, int duration)
+void ProtoConnection::setColor(const ColorRgb & color, int duration)
 {
-	auto colorReq = proto::CreateColorRequest(builder, priority, (color.red << 16) | (color.green << 8) | color.blue, duration);
-	auto req = proto::CreateHyperionRequest(builder,proto::Command_COLOR, colorReq);
+	auto colorReq = hyperionnet::CreateColor(builder, (color.red << 16) | (color.green << 8) | color.blue, duration);
+	auto req = hyperionnet::CreateRequest(builder,hyperionnet::Command_Color, colorReq.Union());
 
 	builder.Finish(req);
 	sendMessage(builder.GetBufferPointer(), builder.GetSize());
 }
 
-void ProtoConnection::setImage(const Image<ColorRgb> &image, int priority, int duration)
+void ProtoConnection::setImage(const Image<ColorRgb> &image, int duration)
 {
-	/* #TODO #BROKEN auto imgData = builder.CreateVector<flatbuffers::Offset<uint8_t>>(image.memptr(), image.width() * image.height() * 3);
-
-	auto imgReq = proto::CreateImageRequest(builder, priority, image.width(), image.height(), imgData, duration);
-	auto req = proto::CreateHyperionRequest(builder,proto::Command_COLOR,0,imgReq);
+	auto imgData = builder.CreateVector(reinterpret_cast<const uint8_t*>(image.memptr()), image.size());
+	auto rawImg = hyperionnet::CreateRawImage(builder, imgData, image.width(), image.height());
+	auto imageReq = hyperionnet::CreateImage(builder, hyperionnet::ImageType_RawImage, rawImg.Union(), duration);
+	auto req = hyperionnet::CreateRequest(builder,hyperionnet::Command_Image,imageReq.Union());
 
 	builder.Finish(req);
-	sendMessage(builder.GetBufferPointer(), builder.GetSize());*/
+	sendMessage(builder.GetBufferPointer(), builder.GetSize());
 }
 
 void ProtoConnection::clear(int priority)
 {
-	auto clearReq = proto::CreateClearRequest(builder, priority);
-	auto req = proto::CreateHyperionRequest(builder,proto::Command_CLEAR,0,0,clearReq);
+	auto clearReq = hyperionnet::CreateClear(builder, priority);
+	auto req = hyperionnet::CreateRequest(builder,hyperionnet::Command_Clear, clearReq.Union());
 
 	builder.Finish(req);
 	sendMessage(builder.GetBufferPointer(), builder.GetSize());
@@ -123,11 +121,7 @@ void ProtoConnection::clear(int priority)
 
 void ProtoConnection::clearAll()
 {
-	auto req = proto::CreateHyperionRequest(builder,proto::Command_CLEARALL);
-
-	// send command message
-	builder.Finish(req);
-	sendMessage(builder.GetBufferPointer(), builder.GetSize());
+	clear(-1);
 }
 
 void ProtoConnection::connectToHost()
@@ -185,41 +179,18 @@ void ProtoConnection::sendMessage(const uint8_t* buffer, uint32_t size)
 	}
 }
 
-bool ProtoConnection::parseReply(const proto::HyperionReply *reply)
+bool ProtoConnection::parseReply(const hyperionnet::Reply *reply)
 {
-	bool success = false;
-
-	switch (reply->type())
-	{
-		case proto::Type_REPLY:
-		{
-			if (!_skipReply)
-			{
-				if (!reply->success())
-				{
-					if (flatbuffers::IsFieldPresent(reply, proto::HyperionReply::VT_ERROR))
-					{
-						throw std::runtime_error("PROTOCONNECTION ERROR: " + reply->error()->str());
-					}
-					else
-					{
-						throw std::runtime_error("PROTOCONNECTION ERROR: No error info");
-					}
-				}
-				else
-				{
-					success = true;
-				}
-			}
-			break;
+	if (!reply->error()) {
+		// no error set must be a success or video
+		const auto videoMode = reply->video();
+		if (videoMode != -1) {
+			// We got a video reply.
+			emit setVideoMode(static_cast<VideoMode>(videoMode));
 		}
-		case proto::Type_VIDEO:
-		{
-			VideoMode vMode = (VideoMode)reply->video();
-			emit setVideoMode(vMode);
-			break;
-		}
+		
+		return true;
 	}
 
-	return success;
+	return false;
 }

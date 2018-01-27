@@ -62,16 +62,16 @@ void ProtoClientConnection::readData()
 			buffer.append(_socket->read(messageSize - buffer.size()));
 		}
 
-		const uint8_t* msgData = reinterpret_cast<const uint8_t*>(buffer.constData());
+		const auto *msgData = reinterpret_cast<const uint8_t*>(buffer.constData());
 		flatbuffers::Verifier verifier(msgData, messageSize);
 
-		if (!proto::VerifyHyperionRequestBuffer(verifier))
+		if (!hyperionnet::VerifyRequestBuffer(verifier))
 		{
 			sendErrorReply("Unable to parse message");
 			return;
 		}
 
-		auto message = proto::GetHyperionRequest(msgData);
+		auto message = hyperionnet::GetRequest(msgData);
 
 		handleMessage(message);
 		emit newMessage(msgData,messageSize);
@@ -86,131 +86,97 @@ void ProtoClientConnection::socketClosed()
 
 void ProtoClientConnection::setVideoMode(const VideoMode videoMode)
 {
-	proto::HyperionReplyBuilder replyBuilder(builder);
-	replyBuilder.add_type(proto::Type_VIDEO);
-	replyBuilder.add_video((int)videoMode);
-
-	auto reply = replyBuilder.Finish();
-	
+	auto reply = hyperionnet::CreateReplyDirect(builder, nullptr, (int)videoMode);
 	builder.Finish(reply);
+	sendMessage();
 }
 
-void ProtoClientConnection::handleMessage(const proto::HyperionRequest * message)
+void ProtoClientConnection::handleMessage(const hyperionnet::Request * req)
 {
-	switch (message->command())
-	{
-	case proto::Command_COLOR:
-		if (!flatbuffers::IsFieldPresent(message, proto::HyperionRequest::VT_COLORREQUEST))
-		{
-			sendErrorReply("Received COLOR command without ColorRequest");
-			break;
-		}
-		handleColorCommand(message->colorRequest());
-		break;
-	case proto::Command_IMAGE:
-		if (!flatbuffers::IsFieldPresent(message, proto::HyperionRequest::VT_IMAGEREQUEST))
-		{
-			sendErrorReply("Received IMAGE command without ImageRequest");
-			break;
-		}
-		handleImageCommand(message->imageRequest());
-		break;
-	case proto::Command_CLEAR:
-		if (!flatbuffers::IsFieldPresent(message, proto::HyperionRequest::VT_CLEARREQUEST))
-		{
-			sendErrorReply("Received CLEAR command without ClearRequest");
-			break;
-		}
-		handleClearCommand(message->clearRequest());
-		break;
-	case proto::Command_CLEARALL:
-		handleClearallCommand();
-		break;
-	default:
+	const void* reqPtr;
+	if ((reqPtr = req->command_as_Color()) != nullptr) {
+		handleColorCommand(static_cast<const hyperionnet::Color*>(reqPtr));
+	} else if ((reqPtr = req->command_as_Image()) != nullptr) {
+		handleImageCommand(static_cast<const hyperionnet::Image*>(reqPtr));
+	} else if ((reqPtr = req->command_as_Clear()) != nullptr) {
+		handleClearCommand(static_cast<const hyperionnet::Clear*>(reqPtr));
+	} else if ((reqPtr = req->command_as_Register()) != nullptr) {
+		handleRegisterCommand(static_cast<const hyperionnet::Register*>(reqPtr));
+	} else {
+		sendErrorReply("Received invalid packet.");
 		handleNotImplemented();
 	}
 }
 
-void ProtoClientConnection::handleColorCommand(const proto::ColorRequest *message)
+void ProtoClientConnection::handleColorCommand(const hyperionnet::Color *colorReq)
 {
 	// extract parameters
-	int priority = message->priority();
-	int duration = message->duration();
+	const int32_t rgbData = colorReq->data();
 	ColorRgb color;
-	color.red = qRed(message->RgbColor());
-	color.green = qGreen(message->RgbColor());
-	color.blue = qBlue(message->RgbColor());
-
-	// make sure the prio is registered before setColor()
-	if(priority != _priority)
-	{
-		_hyperion->clear(_priority);
-		_hyperion->registerInput(priority, hyperion::COMP_PROTOSERVER, "proto@"+_clientAddress);
-		_priority = priority;
-	}
+	color.red = qRed(rgbData);
+	color.green = qGreen(rgbData);
+	color.blue = qBlue(rgbData);
 
 	// set output
-	_hyperion->setColor(_priority, color, duration);
+	_hyperion->setColor(_priority, color, colorReq->duration());
 
 	// send reply
 	sendSuccessReply();
 }
 
-void ProtoClientConnection::handleImageCommand(const proto::ImageRequest *message)
+void ProtoClientConnection::handleRegisterCommand(const hyperionnet::Register *regReq) {
+	_priority = regReq->priority();
+	_hyperion->registerInput(_priority, hyperion::COMP_PROTOSERVER, regReq->origin()->c_str()+_clientAddress);
+}
+
+void ProtoClientConnection::handleImageCommand(const hyperionnet::Image *image)
 {
 	// extract parameters
-	int priority = message->priority();
-	int duration = message->duration();
-	int width = message->imagewidth();
-	int height = message->imageheight();
-	const auto & imageData = message->imagedata();
+	int duration = image->duration();	
 
-	// make sure the prio is registered before setInput()
-	if(priority != _priority)
+	const void* reqPtr;
+	if ((reqPtr = image->data_as_RawImage()) != nullptr)
 	{
-		_hyperion->clear(_priority);
-		_hyperion->registerInput(priority, hyperion::COMP_PROTOSERVER, "proto@"+_clientAddress);
-		_priority = priority;
+		const auto *img = static_cast<const hyperionnet::RawImage*>(reqPtr);
+		const auto & imageData = img->data();
+		const int width = img->width();
+		const int height = img->height();
+		
+		if ((int) imageData->size() != width*height*3)
+		{
+			sendErrorReply("Size of image data does not match with the width and height");
+			return;
+		}
+
+		Image<ColorRgb> image(width, height);
+		memmove(image.memptr(), imageData->data(), imageData->size());
+		_hyperion->setInputImage(_priority, image, duration);
 	}
-
-	// check consistency of the size of the received data
-	if ((int) imageData->size() != width*height*3)
-	{
-		sendErrorReply("Size of image data does not match with the width and height");
-		return;
-	}
-
-	// create ImageRgb
-	Image<ColorRgb> image(width, height);
-	memcpy(image.memptr(), imageData->data(), imageData->size());
-
-	_hyperion->setInputImage(_priority, image, duration);
 
 	// send reply
 	sendSuccessReply();
 }
 
 
-void ProtoClientConnection::handleClearCommand(const proto::ClearRequest *message)
+void ProtoClientConnection::handleClearCommand(const hyperionnet::Clear *clear)
 {
 	// extract parameters
-	int priority = message->priority();
+	const int priority = clear->priority();
 
-	// clear priority
-	_hyperion->clear(priority);
-	// send reply
+	if (priority == -1) {
+		_hyperion->clearall();
+	} 
+	else {
+		// Check if we are clearing ourselves.
+		if (priority == _priority) {
+			_priority = -1;
+		}
+
+		_hyperion->clear(priority);
+	} 
+
 	sendSuccessReply();
 }
-
-void ProtoClientConnection::handleClearallCommand()
-{
-	// clear priority
-	_hyperion->clearall();
-
-	// send reply
-	sendSuccessReply();
-}
-
 
 void ProtoClientConnection::handleNotImplemented()
 {
@@ -230,7 +196,7 @@ void ProtoClientConnection::sendMessage()
 
 void ProtoClientConnection::sendSuccessReply()
 {
-	auto reply = proto::CreateHyperionReplyDirect(builder, proto::Type_REPLY, true);
+	auto reply = hyperionnet::CreateReplyDirect(builder);
 	builder.Finish(reply);
 
 	// send reply
@@ -240,7 +206,7 @@ void ProtoClientConnection::sendSuccessReply()
 void ProtoClientConnection::sendErrorReply(const std::string &error)
 {
 	// create reply
-	auto reply = proto::CreateHyperionReplyDirect(builder, proto::Type_REPLY, false, error.c_str());
+	auto reply = hyperionnet::CreateReplyDirect(builder, error.c_str());
 	builder.Finish(reply);
 
 	// send reply

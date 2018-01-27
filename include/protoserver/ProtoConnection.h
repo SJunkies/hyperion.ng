@@ -46,19 +46,17 @@ public:
 	/// Set all leds to the specified color
 	///
 	/// @param color The color
-	/// @param priority The priority
 	/// @param duration The duration in milliseconds
 	///
-	void setColor(const ColorRgb & color, int priority, int duration = 1);
+	void setColor(const ColorRgb & color, int duration = 1);
 
 	///
 	/// Set the leds according to the given image (assume the image is stretched to the display size)
 	///
 	/// @param image The image
-	/// @param priority The priority
 	/// @param duration The duration in milliseconds
 	///
-	void setImage(const Image<ColorRgb> & image, int priority, int duration = -1);
+	void setImage(const Image<ColorRgb> & image, int duration = -1);
 
 	///
 	/// Clear the given priority channel
@@ -104,7 +102,7 @@ private:
 	///
 	/// @return true if the reply indicates success
 	///
-	bool parseReply(const proto::HyperionReply * reply);
+	bool parseReply(const hyperionnet::Reply * reply);
 
 private:
 	/// The TCP-Socket with the connection to the server

@@ -10,6 +10,7 @@ ProtoConnectionWrapper::ProtoConnectionWrapper(const QString &address,
 	, _connection(address)
 {
 	_connection.setSkipReply(skipProtoReply);
+	// We should probably register with the ProtoConnection here <todo> <flatbuffers>
 	connect(&_connection, SIGNAL(setVideoMode(VideoMode)), this, SIGNAL(setVideoMode(VideoMode)));
 }
 
@@ -19,5 +20,6 @@ ProtoConnectionWrapper::~ProtoConnectionWrapper()
 
 void ProtoConnectionWrapper::receiveImage(const Image<ColorRgb> & image)
 {
-	_connection.setImage(image, _priority, _duration_ms);
+	// Skip the priority sending for now <todo> <flatbuffers>
+	_connection.setImage(image, _duration_ms);
 }

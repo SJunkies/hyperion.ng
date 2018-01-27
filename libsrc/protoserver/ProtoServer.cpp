@@ -144,7 +144,7 @@ void ProtoServer::sendImageToProtoSlaves(int priority, const Image<ColorRgb> & i
 	if ( _forwarder_enabled )
 	{
 		for (int i = 0; i < _proxy_connections.size(); ++i)
-			_proxy_connections.at(i)->setImage(image, priority, duration_ms);
+			_proxy_connections.at(i)->setImage(image, duration_ms);
 	}
 }
 

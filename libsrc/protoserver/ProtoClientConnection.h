@@ -21,7 +21,7 @@
 #include "protoserver/ProtoConnection.h"
 
 ///
-/// The Connection object created by a ProtoServer when a new connection is establshed
+/// The Connection object created by a ProtoServer when a new connection is established
 ///
 class ProtoClientConnection : public QObject
 {
@@ -31,7 +31,6 @@ public:
 	///
 	/// Constructor
 	/// @param socket The Socket object for this connection
-	/// @param hyperion The Hyperion server
 	///
 	ProtoClientConnection(QTcpSocket * socket);
 
@@ -43,6 +42,7 @@ public:
 public slots:
 	///
 	/// Send video mode message to connected client
+	/// @param videoMode the video mode to be set
 	///
 	void setVideoMode(const VideoMode videoMode);
 
@@ -67,40 +67,42 @@ private slots:
 
 private:
 	///
-	/// Handle an incoming Proto message
+	/// Handle an incoming request
 	///
-	/// @param message the incoming message as string
+	/// @param req the incoming request
 	///
-	void handleMessage(const proto::HyperionRequest *message);
+	void handleMessage(const hyperionnet::Request *req);
 
 	///
-	/// Handle an incoming Proto Color message
+	/// Handle an incoming Color message
+	///
+	/// @param color incoming data
+	///
+	void handleColorCommand(const hyperionnet::Color * color);
+
+	///
+	/// Handle an incoming Image message
+	///
+	/// @param image incoming data
+	///
+	void handleImageCommand(const hyperionnet::Image * image);
+
+	///
+	/// Handle an incoming Clear message
+	///
+	/// @param clear incoming data
+	///
+	void handleClearCommand(const hyperionnet::Clear * clear);
+
+	///
+	/// Handle an incoming Register message
 	///
 	/// @param message the incoming message
 	///
-	void handleColorCommand(const proto::ColorRequest * message);
+	void handleRegisterCommand(const hyperionnet::Register *reg);
 
 	///
-	/// Handle an incoming Proto Image message
-	///
-	/// @param message the incoming message
-	///
-	void handleImageCommand(const proto::ImageRequest * message);
-
-	///
-	/// Handle an incoming Proto Clear message
-	///
-	/// @param message the incoming message
-	///
-	void handleClearCommand(const proto::ClearRequest * message);
-
-	///
-	/// Handle an incoming Proto Clearall message
-	///
-	void handleClearallCommand();
-
-	///
-	/// Handle an incoming Proto message of unknown type
+	/// Handle an incoming message of unknown type
 	///
 	void handleNotImplemented();
 
