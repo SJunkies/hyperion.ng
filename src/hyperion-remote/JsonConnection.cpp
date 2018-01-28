@@ -49,6 +49,18 @@ JsonConnection::~JsonConnection()
 	_socket.close();
 }
 
+void JsonConnection::login(QString username, QString password) {
+	QJsonObject command;
+	command["command"] = QString("authorize");
+	command["subcommand"] = QString("login");
+	command["username"] = username;
+	command["password"] = password;
+
+	QJsonObject reply = sendMessage(command);
+	// parse reply message
+	parseReply(reply);
+}
+
 void JsonConnection::setColor(std::vector<QColor> colors, int priority, int duration)
 {
 	qDebug() << "Set color to " << colors[0].red() << " " << colors[0].green() << " " << colors[0].blue() << (colors.size() > 1 ? " + ..." : "");

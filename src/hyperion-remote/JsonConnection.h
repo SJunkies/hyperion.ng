@@ -29,6 +29,12 @@ public:
 	~JsonConnection();
 
 	///
+	/// Log in for the required authorization
+	/// @param username the username set in hyperion
+	/// @param password the password set for the user
+	void login(QString username, QString password);
+
+	///
 	/// Set all leds to the specified color
 	///
 	/// @param color The color

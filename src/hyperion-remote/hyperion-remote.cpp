@@ -100,6 +100,8 @@ int main(int argc, char * argv[])
 		BooleanOption   & argConfigGet   = parser.add<BooleanOption>(0x0, "configGet"  , "Print the current loaded Hyperion configuration file");
 		BooleanOption   & argSchemaGet   = parser.add<BooleanOption>(0x0, "schemaGet"  , "Print the json schema for Hyperion configuration");
 		Option          & argConfigSet   = parser.add<Option>       (0x0, "configSet", "Write to the actual loaded configuration file. Should be a Json object string.");
+		Option          & argPassword    = parser.add<Option>       (0x0, "pass", "The password required for authorization.");
+		Option          & argUsername    = parser.add<Option>       ('u', "user", "The username required for authorization.");
 
 		// parse all _options
 		parser.process(app);
@@ -108,6 +110,13 @@ int main(int argc, char * argv[])
 		if (parser.isSet(argHelp))
 		{
 			parser.showHelp(0);
+		}
+
+		if (!parser.isSet(argUsername) || !parser.isSet(argPassword)) {
+			qWarning() << "You need to provide an username and a password!";
+			showHelp(argUsername);
+			showHelp(argPassword);
+			return 1;
 		}
 
 		// check if at least one of the available color transforms is set
@@ -156,6 +165,7 @@ int main(int argc, char * argv[])
 
 		// create the connection to the hyperion server
 		JsonConnection connection(argAddress.value(parser), parser.isSet(argPrint));
+		connection.login(argUsername.value(parser), argPassword.value(parser));
 
 		// now execute the given command
 		if (parser.isSet(argColor))
